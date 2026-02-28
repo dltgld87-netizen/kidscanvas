@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidsCanvas - 스마트 교안 도우미</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, arrayUnion, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Configuration ---
+        let firebaseConfig = {};
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        } catch (e) { console.warn("Firebase config check."); }
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'kids-canvas-mvp';
+        
+        // ✅ API 키는 이제 서버(api/generate.js)에서 관리합니다. 여기엔 아무것도 안 써도 돼요.
+        const defaultApiKey = "BACKEND_MODE"; 
+
+        let app, auth, db;
+        if (firebaseConfig.apiKey) {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        }
+
+        // --- State Management ---
+        let state = {
+            user: null,
+            activeMode: 'planner',
+            ageGroup: '만 4세',
+            selectedTone: 'standard',
+            inputText: '',
+            result: '',
+            loading: false,
+            isUpdating: false,
+            sessionId: null,
+            lastGenerateTime: null,
+            isInputTracked: false,
+            customApiKey: defaultApiKey || localStorage.getItem('kc_api_key') || ""
+        };
+
+        const elements = {
+            notification: document.getElementById('notification'),
+            plannerTab: document.getElementById('planner-tab'),
+            obsTab: document.getElementById('obs-tab'),
+            ageSelect: document.getElementById('age-select'),
+            textarea: document.getElementById('input-textarea'),
+            generateBtn: document.getElementById('generate-btn'),
+            resultSection: document.getElementById('result-section'),
+            resultPre: document.getElementById('result-content'),
+            resultOverlay: document.getElementById('result-overlay'),
+            copyBtn: document.getElementById('copy-btn'),
+            resetBtn: document.getElementById('reset-btn'),
+            toneRadios: document.getElementsByName('tone'),
+            settingsBtn: document.getElementById('settings-btn'),
+            settingsModal: document.getElementById('settings-modal'),
+            saveKeyBtn: document.getElementById('save-key-btn'),
+            apiKeyInput: document.getElementById('api-key-input'),
+            closeSettings: document.getElementById('close-settings'),
+            onboardingOverlay: document.getElementById('onboarding-overlay')
+        };
+
+        const showToast = (msg) => {
+            const toastText = document.getElementById('toast-text');
+            toastText.innerText = msg;
+            elements.notification.classList.remove('hidden');
+            setTimeout(() => { elements.notification.classList.add('hidden'); }, 3000);
+        };
+
+        const logEvent = async (eventName, params = {}) => {
+            if (!auth || !auth.currentUser || !state.sessionId) return;
+            try {
+                const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'usage_logs', state.sessionId);
+                await updateDoc(sessionRef, {
+                    events: arrayUnion({ name: eventName, timestamp: new Date().toISOString(), ...params }),
+                    lastActive: serverTimestamp()
+                });
+            } catch (e) { }
+        };
+
+        // --- Core Engine ---
+        const generateDraft = async (isUpdate = false) => {
+            if (!state.inputText.trim()) return;
+            
+            if (isUpdate) {
+                state.isUpdating = true;
+            } else {
+                state.loading = true;
+                state.result = '';
+            }
+            updateUI();
+
+            const systemPrompt = `
+                당신은 대한민국 '2019 개정 누리과정' 및 구성주의 유아교육 전문가입니다.
+                선생님의 나이브하게 입력한 요구사항을 분석하여 전문적인 교육 문서를 작성하세요.
+                [핵심 미션]
+                1. 문맥 파악: 내용의 성격을 스스로 판단하여 도입 문구를 결정하세요.
+                2. 발문 수준: ${state.ageGroup} 발달 수준에 맞춰 T-C 상호작용 대본을 상세하게 작성하세요.
+                3. 톤앤매너: '${state.selectedTone}' 프리셋에 맞춰 문체를 지키세요.
+                4. 논리적 검증: 역사/인물/전쟁 등의 주제도 교육적 가치(평화, 감사 등)에 맞춰 풍부하게 서술하세요.
+            `;
+
+            const userPrompt = `대상: ${state.ageGroup}, 톤: ${state.selectedTone}, 내용: "${state.inputText}"`;
+
+            try {
+                // ✅ 이제 Gemini API를 직접 호출하지 않고, 우리 서버(api/generate.js)를 통해 호출합니다.
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ systemPrompt, userPrompt })
+                });
+                
+                if (!response.ok) throw new Error("API_ERROR");
+                const data = await response.json();
+                state.result = data.result;
+                
+                if (!isUpdate && db) {
+                    logEvent('generate_result', { mode: state.activeMode });
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usage_logs', state.sessionId), { "stats.generate_count": increment(1) });
+                }
+            } catch (error) {
+                showToast("생성 오류가 발생했습니다. 키 설정을 확인해 주세요.");
+            } finally {
+                state.loading = false; state.isUpdating = false;
+                updateUI();
+            }
+        };
+
+        const initSession = async () => {
+            if (!auth) return;
+            try {
+                let currentUser;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    currentUser = (await signInWithCustomToken(auth, __initial_auth_token)).user;
+                } else {
+                    currentUser = (await signInAnonymously(auth)).user;
+                }
+                state.user = currentUser;
+                let persistentId = localStorage.getItem('kids_canvas_anon_id') || `anon_${Math.random().toString(36).substring(2, 11)}`;
+                localStorage.setItem('kids_canvas_anon_id', persistentId);
+                state.sessionId = `${persistentId}_${Date.now()}`;
+                if (db) {
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'usage_logs', state.sessionId), {
+                        session_id: state.sessionId, uid: currentUser.uid, startTime: serverTimestamp(), stats: { generate_count: 0, copy_count: 0 }
+                    });
+                }
+            } catch (e) { }
+        };
+
+        const updateUI = () => {
+            const activeClass = "flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-black bg-white shadow-md text-[#9EC6AA] border border-[#9EC6AA]/20 transition-all";
+            const inactiveClass = "flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-bold text-slate-400 hover:text-slate-500 transition-all";
+            
+            elements.plannerTab.className = state.activeMode === 'planner' ? activeClass : inactiveClass;
+            elements.plannerTab.innerHTML = `<i data-lucide="clipboard-list" class="w-4 h-4"></i> 수업 계획안`;
+            elements.obsTab.className = state.activeMode === 'observation' ? activeClass : inactiveClass;
+            elements.obsTab.innerHTML = `<i data-lucide="baby" class="w-4 h-4"></i> 아동 관찰 기록`;
+
+            elements.generateBtn.disabled = state.loading || !state.inputText.trim();
+            elements.generateBtn.innerHTML = state.loading ? `<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> 분석 중...` : `<i data-lucide="pencil" class="w-5 h-5"></i> 초안 생성하기`;
+            
+            if (state.result) {
+                elements.resultSection.classList.remove('hidden');
+                elements.resultPre.innerText = state.result;
+                state.isUpdating ? elements.resultOverlay.classList.remove('hidden') : elements.resultOverlay.classList.add('hidden');
+                state.isUpdating ? elements.resultPre.classList.add('opacity-30') : elements.resultPre.classList.remove('opacity-30');
+            } else {
+                elements.resultSection.classList.add('hidden');
+            }
+
+            elements.toneRadios.forEach(radio => {
+                const div = radio.closest('label').querySelector('div');
+                if (radio.value === state.selectedTone) {
+                    div.className = "p-4 rounded-2xl border-2 border-[#9EC6AA] bg-white shadow-md transition-all text-center h-full flex flex-col justify-center";
+                    div.querySelector('p').className = "text-[11px] font-black text-[#9EC6AA]";
+                } else {
+                    div.className = "p-4 rounded-2xl border-2 border-transparent bg-white/40 hover:bg-white transition-all text-center h-full flex flex-col justify-center opacity-60";
+                    div.querySelector('p').className = "text-[11px] font-black text-slate-500";
+                }
+            });
+            lucide.createIcons();
+        };
+
+        // Handlers
+        elements.plannerTab.onclick = () => { state.activeMode = 'planner'; state.result = ''; updateUI(); };
+        elements.obsTab.onclick = () => { state.activeMode = 'observation'; state.result = ''; updateUI(); };
+        elements.generateBtn.onclick = () => generateDraft();
+        elements.copyBtn.onclick = () => {
+            const el = document.createElement('textarea'); el.value = state.result; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+            showToast("복사되었습니다!");
+        };
+        elements.resetBtn.onclick = () => { state.inputText = ''; state.result = ''; elements.textarea.value = ''; updateUI(); };
+        elements.settingsBtn.onclick = () => { elements.apiKeyInput.value = state.customApiKey; elements.settingsModal.classList.remove('hidden'); };
+        elements.saveKeyBtn.onclick = () => {
+            const newKey = elements.apiKeyInput.value.trim();
+            state.customApiKey = newKey; localStorage.setItem('kc_api_key', newKey);
+            elements.settingsModal.classList.add('hidden'); elements.onboardingOverlay.classList.add('hidden');
+            showToast("설정이 저장되었습니다.");
+        };
+        elements.closeSettings.onclick = () => elements.settingsModal.classList.add('hidden');
+        elements.toneRadios.forEach(radio => {
+            radio.onchange = (e) => { state.selectedTone = e.target.value; if (state.result) generateDraft(true); updateUI(); };
+        });
+        elements.textarea.oninput = (e) => { state.inputText = e.target.value; updateUI(); };
+
+        window.onload = () => { 
+            initSession(); updateUI(); 
+            // ✅ 이제 서버에서 API 키를 관리하므로 온보딩 화면이 필요 없습니다.
+        };
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&display=swap');
+        body { font-family: 'Pretendard', sans-serif; background-color: #FDFCFB; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
+        #result-content { white-space: pre-wrap; line-height: 1.9; letter-spacing: -0.01em; word-break: keep-all; text-align: justify; }
+        .primary-btn { background-color: #9EC6AA; }
+        .pink-btn { background-color: #EE6A92; }
+        .pink-text { color: #EE6A92; }
+    </style>
+</head>
+<body class="text-slate-900 selection:bg-[#9EC6AA]/20 pb-20">
+
+    <!-- Onboarding Overlay (핑크색 안내) -->
+    <div id="onboarding-overlay" class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-6 hidden">
+        <div class="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in">
+            <div class="w-20 h-20 bg-[#EE6A92]/10 rounded-3xl flex items-center justify-center mx-auto text-[#EE6A92]">
+                <i data-lucide="key" class="w-10 h-10"></i>
+            </div>
+            <div class="space-y-3">
+                <h2 class="text-3xl font-black tracking-tight">반가워요, 선생님! 🌿</h2>
+                <p class="text-slate-500 font-medium leading-relaxed">
+                    KidsCanvas의 AI 두뇌를 깨우기 위해<br/>
+                    본인의 <span class="text-[#EE6A92] font-bold">API Key</span> 등록이 한 번 필요합니다.
+                </p>
+            </div>
+            <button onclick="document.getElementById('settings-modal').classList.remove('hidden')" class="w-full py-5 pink-btn text-white rounded-[32px] font-black text-xl shadow-xl shadow-[#EE6A92]/20 hover:scale-105 transition-all">
+                지금 등록하고 시작하기
+            </button>
+            <p class="text-[10px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed">Beta Test Version v3.5.5</p>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="notification" class="fixed top-6 left-1/2 -translate-x-1/2 z-[150] bg-slate-900 text-white px-8 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 hidden transition-all">
+        <i data-lucide="check-circle-2" class="text-[#9EC6AA] w-5 h-5"></i>
+        <span id="toast-text" class="font-bold text-sm tracking-tight text-[#FDFCFB]">알림</span>
+    </div>
+
+    <!-- Settings Modal (z-index를 온보딩보다 높게 수정) -->
+    <div id="settings-modal" class="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center hidden p-6">
+        <div class="bg-white rounded-[40px] w-full max-w-md p-10 shadow-2xl animate-in zoom-in duration-300">
+            <h3 class="text-2xl font-black mb-2 tracking-tight">API Key 설정</h3>
+            <p class="text-sm text-slate-500 mb-8 leading-relaxed font-medium">구글 AI 스튜디오에서 발급받은 개인 API 키를 입력해 주세요. 브라우저에 안전하게 저장됩니다.</p>
+            <input id="api-key-input" type="password" placeholder="AIza..." class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 mb-6 focus:border-[#9EC6AA] outline-none font-mono text-sm" />
+            <div class="flex gap-3">
+                <button id="close-settings" class="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold hover:bg-slate-200 transition-colors">취소</button>
+                <button id="save-key-btn" class="flex-1 py-4 primary-btn text-white rounded-2xl font-bold transition-all hover:scale-105">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="max-w-4xl mx-auto p-8 flex items-center justify-between">
+        <div class="flex items-center gap-2.5 transition-all hover:scale-105 cursor-pointer">
+            <div class="w-11 h-11 bg-[#9EC6AA] rounded-2xl flex items-center justify-center text-white shadow-lg rotate-3">
+                <i data-lucide="leaf" class="w-6 h-6"></i>
+            </div>
+            <h1 class="text-2xl font-black tracking-tighter text-slate-800">KidsCanvas</h1>
+        </div>
+        <button id="settings-btn" class="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-[#9EC6AA] transition-all hover:rotate-90">
+            <i data-lucide="settings" class="w-6 h-6"></i>
+        </button>
+    </nav>
+
+    <!-- Content -->
+    <main class="max-w-2xl mx-auto px-6 pt-6">
+        <header class="text-center mb-12 space-y-3">
+            <h2 class="text-4xl font-black leading-tight tracking-tighter text-slate-900 uppercase italic">Lesson Plan Studio</h2>
+            <p class="text-slate-500 font-semibold tracking-tight text-sm px-4 leading-relaxed opacity-80">선생님의 의도에 맞게 적절한 초안을 작성합니다.</p>
+        </header>
+
+        <div class="bg-slate-100 p-1.5 rounded-3xl flex mb-8 border border-slate-200 shadow-inner">
+            <button id="planner-tab" class="flex-1"></button>
+            <button id="obs-tab" class="flex-1"></button>
+        </div>
+
+        <div class="bg-white p-8 rounded-[44px] shadow-2xl shadow-slate-200/50 border border-slate-100 space-y-6 relative focus-within:ring-4 focus-within:ring-[#9EC6AA]/10 transition-all">
+            <div class="flex items-center justify-between">
+                <div class="relative inline-block">
+                    <select id="age-select" class="appearance-none bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 pr-10 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#9EC6AA] cursor-pointer">
+                        <option>만 3세</option><option selected>만 4세</option><option>만 5세</option>
+                    </select>
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><i data-lucide="chevron-down" class="w-3 h-3"></i></div>
+                </div>
+            </div>
+            <textarea id="input-textarea" class="w-full h-52 bg-slate-50 border-none rounded-3xl p-6 text-lg focus:ring-0 outline-none resize-none transition-all placeholder:text-slate-300 font-medium leading-relaxed custom-scrollbar"></textarea>
+            <button id="generate-btn" class="w-full py-5 primary-btn text-white rounded-[32px] font-black text-xl shadow-xl shadow-[#9EC6AA]/30 hover:scale-[1.01] transition-all active:scale-[0.98] flex items-center justify-center gap-3"></button>
+        </div>
+
+        <!-- Result -->
+        <div id="result-section" class="mt-12 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700 pb-20 hidden">
+            <div class="bg-white rounded-[48px] shadow-2xl shadow-slate-300/50 border border-slate-100 overflow-hidden relative">
+                <div id="result-overlay" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-20 flex flex-col items-center justify-center gap-3 hidden">
+                    <i data-lucide="sparkles" class="text-[#EE6A92] w-10 h-10 animate-spin"></i>
+                    <p class="text-xs font-black text-[#EE6A92] tracking-widest uppercase animate-pulse">Tone Re-Constructing...</p>
+                </div>
+                <div class="p-8 bg-slate-900 text-white flex justify-between items-center font-black tracking-tight text-xl">
+                    <h3>Official Draft Result</h3>
+                </div>
+                <div class="p-8 md:p-12 space-y-10">
+                    <div class="space-y-4 bg-slate-50 p-6 rounded-[32px] border border-slate-100 shadow-inner">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">문장 톤 실시간 재구성</p>
+                        <div class="flex flex-wrap gap-3">
+                            <label class="flex-1 min-w-[140px] cursor-pointer group"><input type="radio" name="tone" value="standard" class="hidden" checked><div><p class="text-[11px] font-black">제출용 정석</p><p class="text-[9px] text-slate-400 mt-1 tracking-tighter">공식 문서형</p></div></label>
+                            <label class="flex-1 min-w-[140px] cursor-pointer group"><input type="radio" name="tone" value="soft" class="hidden"><div><p class="text-[11px] font-black">부드럽게 설명</p><p class="text-[9px] text-slate-400 mt-1 tracking-tighter">따뜻한 대화형</p></div></label>
+                            <label class="flex-1 min-w-[140px] cursor-pointer group"><input type="radio" name="tone" value="observation" class="hidden"><div><p class="text-[11px] font-black">관찰 중심 서술</p><p class="text-[9px] text-slate-400 mt-1 tracking-tighter">전문 용어 강조</p></div></label>
+                        </div>
+                    </div>
+                    <div class="prose prose-slate max-w-none bg-slate-50/30 p-4 md:p-0 rounded-3xl">
+                        <pre id="result-content" class="font-sans text-slate-700 text-[14px] md:text-base leading-relaxed font-medium selection:bg-[#9EC6AA]/30 transition-all duration-500"></pre>
+                    </div>
+                </div>
+                <div class="p-8 pt-0 flex flex-col md:flex-row gap-5 justify-between items-center border-t border-slate-50 mt-4 pt-10">
+                    <button id="copy-btn" class="w-full md:w-auto inline-flex items-center justify-center gap-3 text-base font-black text-white px-12 py-5 pink-btn rounded-[28px] hover:scale-[1.03] active:scale-95 transition-all shadow-xl shadow-[#EE6A92]/20">
+                        <i data-lucide="clipboard-copy"></i> 복사해서 바로 활용하기
+                    </button>
+                    <div class="flex items-center gap-5">
+                        <button id="reset-btn" class="text-slate-300 hover:text-[#EE6A92] transition-all p-2 hover:scale-125" title="다시 작성하기"><i data-lucide="rotate-ccw" class="w-6 h-6"></i></button>
+                        <div class="text-[10px] font-black text-slate-300 uppercase tracking-widest italic tracking-widest">Final Edition</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-20 text-center space-y-6 px-6 opacity-90 pb-10">
+            <div class="flex flex-col items-center gap-5">
+                <div class="flex items-center justify-center gap-2 text-[11px] text-slate-400 font-bold uppercase tracking-wide bg-white px-5 py-2.5 rounded-full border border-slate-100 shadow-sm">
+                    <i data-lucide="alert-triangle" class="text-[#EE6A92] w-4 h-4"></i>
+                    본 내용은 AI가 작성한 초안이며, 최종 검토 및 사용에 따른 모든 법적 책임은 사용자에게 있습니다.
+                </div>
+                <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-relaxed">
+                    &copy; 2026. KidsCanvas All Rights Reserved.<br/>
+                    본 플랫폼에 대한 모든 권리는 제작자에게 있으며, 무단 전재 및 재배포를 금합니다.
+                </p>
+            </div>
+        </footer>
+    </main>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
