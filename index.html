@@ -232,26 +232,6 @@
 </head>
 <body class="text-slate-900 selection:bg-[#9EC6AA]/20 pb-20">
 
-    <!-- Onboarding Overlay (핑크색 안내) -->
-    <div id="onboarding-overlay" class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-6 hidden">
-        <div class="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in">
-            <div class="w-20 h-20 bg-[#EE6A92]/10 rounded-3xl flex items-center justify-center mx-auto text-[#EE6A92]">
-                <i data-lucide="key" class="w-10 h-10"></i>
-            </div>
-            <div class="space-y-3">
-                <h2 class="text-3xl font-black tracking-tight">반가워요, 선생님! 🌿</h2>
-                <p class="text-slate-500 font-medium leading-relaxed">
-                    KidsCanvas의 AI 두뇌를 깨우기 위해<br/>
-                    본인의 <span class="text-[#EE6A92] font-bold">API Key</span> 등록이 한 번 필요합니다.
-                </p>
-            </div>
-            <button onclick="document.getElementById('settings-modal').classList.remove('hidden')" class="w-full py-5 pink-btn text-white rounded-[32px] font-black text-xl shadow-xl shadow-[#EE6A92]/20 hover:scale-105 transition-all">
-                지금 등록하고 시작하기
-            </button>
-            <p class="text-[10px] text-slate-300 font-bold uppercase tracking-widest leading-relaxed">Beta Test Version v3.5.5</p>
-        </div>
-    </div>
-
     <!-- Toast -->
     <div id="notification" class="fixed top-6 left-1/2 -translate-x-1/2 z-[150] bg-slate-900 text-white px-8 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 hidden transition-all">
         <i data-lucide="check-circle-2" class="text-[#9EC6AA] w-5 h-5"></i>
