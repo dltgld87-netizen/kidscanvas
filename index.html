@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KidsCanvas Pro - 스마트 교안 어시스턴트</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <style>
         :root { --deep-green: #1B4332; --oak-beige: #F5EBE0; --muted-wood: #D5BDAF; --soft-white: #FCFBFA; }
@@ -29,16 +30,37 @@
         #result-overlay.active { display: flex; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 마크다운 렌더링 스타일 */
+        #result-content h1, #result-content h2, #result-content h3 {
+            font-weight: 800; color: #1B4332; margin-top: 1.2em; margin-bottom: 0.4em;
+        }
+        #result-content h1 { font-size: 1.1em; border-bottom: 2px solid #F5EBE0; padding-bottom: 0.3em; }
+        #result-content h2 { font-size: 1em; }
+        #result-content h3 { font-size: 0.95em; color: #2D6A4F; }
+        #result-content strong { font-weight: 800; color: #1B4332; }
+        #result-content em { font-style: italic; color: #555; }
+        #result-content ul, #result-content ol { padding-left: 1.4em; margin: 0.5em 0; }
+        #result-content li { margin-bottom: 0.3em; line-height: 1.7; }
+        #result-content ul li { list-style-type: disc; }
+        #result-content ol li { list-style-type: decimal; }
+        #result-content table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.85em; }
+        #result-content th { background: #1B4332; color: white; padding: 8px 12px; text-align: left; font-weight: 700; }
+        #result-content td { padding: 7px 12px; border-bottom: 1px solid #F5EBE0; vertical-align: top; }
+        #result-content tr:nth-child(even) td { background: #FAFAF9; }
+        #result-content blockquote { border-left: 3px solid #D5BDAF; padding-left: 1em; color: #888; margin: 0.8em 0; font-style: italic; }
+        #result-content hr { border: none; border-top: 1px solid #F5EBE0; margin: 1em 0; }
+        #result-content p { margin-bottom: 0.6em; line-height: 1.8; }
     </style>
 </head>
 <body>
- 
+
     <!-- Toast -->
     <div id="notification" class="fixed top-6 left-1/2 -translate-x-1/2 z-[150] bg-slate-900 text-white px-8 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 hidden">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9EC6AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         <span id="toast-text" class="font-bold text-sm">알림</span>
     </div>
- 
+
     <!-- Nav -->
     <nav class="fixed w-full z-50 glass-nav px-6 py-4">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
@@ -56,20 +78,20 @@
             </div>
         </div>
     </nav>
- 
+
     <!-- Main -->
     <main class="pt-28 pb-20 px-6 max-w-7xl mx-auto grid lg:grid-cols-12 gap-8">
- 
+
         <!-- 왼쪽: Studio -->
         <div class="lg:col-span-7 space-y-6 fade-in">
- 
+
             <!-- 입력 카드 -->
             <div class="premium-card p-8 md:p-10">
                 <div class="mb-6 flex items-center justify-between border-b border-slate-50 pb-4">
                     <h2 class="text-lg font-black text-[#1B4332] uppercase tracking-wider">Lesson Studio</h2>
                     <span class="text-[9px] font-bold text-slate-300 uppercase">AI-Powered · 누리과정</span>
                 </div>
- 
+
                 <!-- 탭 -->
                 <div class="bg-slate-100 p-1 rounded-xl flex mb-6">
                     <button id="planner-tab" class="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all tab-active">
@@ -81,7 +103,7 @@
                         아동 관찰 기록
                     </button>
                 </div>
- 
+
                 <!-- 연령 + 입력 -->
                 <div class="space-y-4">
                     <div class="flex items-center gap-3">
@@ -99,21 +121,21 @@
                     </button>
                 </div>
             </div>
- 
+
             <!-- 결과 카드 -->
             <div id="result-section" class="premium-card overflow-hidden border-2 border-[#F5EBE0] fade-in" style="position:relative;">
                 <div id="result-overlay">
                     <svg class="spin text-[#1B4332] w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                     <p class="text-[10px] font-black text-[#1B4332] tracking-widest uppercase">Tone Re-Constructing...</p>
                 </div>
- 
+
                 <div class="p-6 bg-[#1B4332] text-white flex justify-between items-center">
                     <h3 class="font-black tracking-tight text-sm uppercase">Official Draft Result</h3>
                     <button id="reset-btn" title="다시 작성하기" class="opacity-50 hover:opacity-100 transition-opacity">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                     </button>
                 </div>
- 
+
                 <div class="p-8 space-y-8">
                     <!-- 톤 선택 -->
                     <div class="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100">
@@ -142,9 +164,9 @@
                             </label>
                         </div>
                     </div>
-                    <pre id="result-content" class="font-sans text-slate-700 text-sm leading-relaxed whitespace-pre-wrap custom-scroll"></pre>
+                    <div id="result-content" class="text-slate-700 text-sm leading-relaxed custom-scroll"></div>
                 </div>
- 
+
                 <div class="px-8 pb-8 flex gap-3">
                     <button id="copy-btn" class="btn-forest flex-1 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-green-900/10">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
@@ -153,13 +175,13 @@
                 </div>
             </div>
         </div>
- 
+
         <!-- 오른쪽: 안내 패널 -->
         <aside class="lg:col-span-5 space-y-6 fade-in" style="animation-delay:0.15s;">
             <div class="px-2">
                 <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">사용 안내</h3>
             </div>
- 
+
             <div class="premium-card p-8 space-y-6">
                 <div class="space-y-5">
                     <div class="flex gap-4">
@@ -184,7 +206,7 @@
                         </div>
                     </div>
                 </div>
- 
+
                 <div class="border-t border-slate-50 pt-6 space-y-3">
                     <p class="text-[9px] font-black text-slate-300 uppercase tracking-widest">지원 문서 유형</p>
                     <div class="flex flex-wrap gap-2">
@@ -195,21 +217,21 @@
                     </div>
                 </div>
             </div>
- 
+
             <div class="premium-card p-6 border-l-4 border-[#D5BDAF]">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">안내사항</p>
                 <p class="text-[11px] text-slate-500 leading-relaxed">본 내용은 AI가 작성한 초안입니다. 최종 검토 및 사용에 따른 모든 법적 책임은 사용자에게 있습니다.</p>
             </div>
         </aside>
     </main>
- 
+
     <footer class="py-12 border-t border-slate-50 text-center text-[9px] font-bold text-slate-300 uppercase tracking-[0.3em]">
         © 2026 KIDS CANVAS PRO · Premium Assistant for Educators
     </footer>
- 
+
     <script>
         let state = { activeMode: 'planner', ageGroup: '만 4세', selectedTone: 'standard', inputText: '', result: '' };
- 
+
         const el = {
             plannerTab: document.getElementById('planner-tab'),
             obsTab: document.getElementById('obs-tab'),
@@ -224,13 +246,13 @@
             toneRadios: document.getElementsByName('tone'),
             notification: document.getElementById('notification'),
         };
- 
+
         const showToast = (msg) => {
             document.getElementById('toast-text').innerText = msg;
             el.notification.classList.remove('hidden');
             setTimeout(() => el.notification.classList.add('hidden'), 3000);
         };
- 
+
         const updateToneUI = () => {
             el.toneRadios.forEach(radio => {
                 const div = radio.closest('label').querySelector('div');
@@ -238,26 +260,26 @@
                 else { div.classList.remove('tone-active'); }
             });
         };
- 
+
         const updateTabUI = () => {
             const active = 'flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all tab-active';
             const inactive = 'flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all tab-inactive';
             el.plannerTab.className = state.activeMode === 'planner' ? active : inactive;
             el.obsTab.className = state.activeMode === 'observation' ? active : inactive;
         };
- 
+
         const setLoading = (on) => {
             el.generateBtn.disabled = on;
             el.generateBtn.innerHTML = on
                 ? `<svg class="spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> AI가 구상 중입니다...`
                 : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg> 초안 생성하기`;
         };
- 
+
         const generateDraft = async (isUpdate = false) => {
             if (!state.inputText.trim()) return;
             if (isUpdate) { el.resultOverlay.classList.add('active'); }
             else { setLoading(true); }
- 
+
             const systemPrompt = `당신은 대한민국 '2019 개정 누리과정' 및 구성주의 유아교육 전문가입니다. 선생님의 요구사항을 분석하여 전문적인 교육 문서를 작성하세요.
 [핵심 미션]
 1. 문맥 파악: 내용의 성격을 스스로 판단하여 도입 문구를 결정하세요.
@@ -265,7 +287,7 @@
 3. 톤앤매너: '${state.selectedTone}' 프리셋에 맞춰 문체를 지키세요. (standard=공식문서형, soft=따뜻한 대화형, observation=전문 관찰 기록)
 4. 모드: ${state.activeMode === 'planner' ? '수업 계획안' : '아동 관찰 기록'}`;
             const userPrompt = `대상: ${state.ageGroup}, 톤: ${state.selectedTone}, 내용: "${state.inputText}"`;
- 
+
             try {
                 const response = await fetch('/api/generate', {
                     method: 'POST',
@@ -275,7 +297,7 @@
                 if (!response.ok) throw new Error("API_ERROR");
                 const data = await response.json();
                 state.result = data.result;
-                el.resultPre.innerText = state.result;
+                el.resultPre.innerHTML = marked.parse(state.result);
                 el.resultSection.classList.add('visible');
                 if (!isUpdate) el.resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } catch (e) {
@@ -285,7 +307,7 @@
                 el.resultOverlay.classList.remove('active');
             }
         };
- 
+
         el.plannerTab.onclick = () => { state.activeMode = 'planner'; state.result = ''; el.resultSection.classList.remove('visible'); updateTabUI(); };
         el.obsTab.onclick = () => { state.activeMode = 'observation'; state.result = ''; el.resultSection.classList.remove('visible'); updateTabUI(); };
         el.ageSelect.onchange = (e) => { state.ageGroup = e.target.value; };
@@ -302,7 +324,7 @@
         el.toneRadios.forEach(radio => {
             radio.onchange = (e) => { state.selectedTone = e.target.value; updateToneUI(); if (state.result) generateDraft(true); };
         });
- 
+
         updateTabUI();
         updateToneUI();
     </script>
