@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KidsCanvas Pro - 스마트 교안 어시스턴트</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <style>
         :root { --deep-green: #1B4332; --oak-beige: #F5EBE0; --muted-wood: #D5BDAF; --soft-white: #FCFBFA; }
@@ -26,41 +25,38 @@
         @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         #result-section { display: none; }
         #result-section.visible { display: block; }
-        #result-overlay { display: none; position: absolute; inset: 0; background: rgba(255,255,255,0.85); backdrop-filter: blur(4px); z-index: 10; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+        #result-overlay { display: none; position: absolute; inset: 0; background: rgba(255,255,255,0.85); backdrop-filter: blur(4px); z-index: 10; align-items: center; justify-content: center; flex-direction: column; gap: 12px; border-radius: 24px; }
         #result-overlay.active { display: flex; }
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* 마크다운 렌더링 스타일 */
-        #result-content h1, #result-content h2, #result-content h3 {
-            font-weight: 800; color: #1B4332; margin-top: 1.2em; margin-bottom: 0.4em;
-        }
-        #result-content h1 { font-size: 1.1em; border-bottom: 2px solid #F5EBE0; padding-bottom: 0.3em; }
-        #result-content h2 { font-size: 1em; }
-        #result-content h3 { font-size: 0.95em; color: #2D6A4F; }
-        #result-content strong { font-weight: 800; color: #1B4332; }
-        #result-content em { font-style: italic; color: #555; }
-        #result-content ul, #result-content ol { padding-left: 1.4em; margin: 0.5em 0; }
-        #result-content li { margin-bottom: 0.3em; line-height: 1.7; }
-        #result-content ul li { list-style-type: disc; }
-        #result-content ol li { list-style-type: decimal; }
-        #result-content table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.85em; }
-        #result-content th { background: #1B4332; color: white; padding: 8px 12px; text-align: left; font-weight: 700; }
-        #result-content td { padding: 7px 12px; border-bottom: 1px solid #F5EBE0; vertical-align: top; }
-        #result-content tr:nth-child(even) td { background: #FAFAF9; }
-        #result-content blockquote { border-left: 3px solid #D5BDAF; padding-left: 1em; color: #888; margin: 0.8em 0; font-style: italic; }
-        #result-content hr { border: none; border-top: 1px solid #F5EBE0; margin: 1em 0; }
-        #result-content p { margin-bottom: 0.6em; line-height: 1.8; }
+ 
+        /* 교안 양식 테이블 스타일 */
+        .lesson-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .lesson-table td, .lesson-table th { border: 1px solid #2D3436; padding: 8px 12px; vertical-align: top; line-height: 1.7; }
+        .lesson-table .header-cell { background: #1B4332; color: white; font-weight: 700; text-align: center; white-space: nowrap; width: 80px; }
+        .lesson-table .sub-header { background: #f0f7f4; font-weight: 700; color: #1B4332; text-align: center; white-space: nowrap; width: 70px; }
+        .lesson-table .title-row td { background: #1B4332; color: white; font-weight: 800; text-align: center; font-size: 15px; padding: 12px; letter-spacing: 0.05em; }
+        .lesson-table .approval-header { background: #f0f7f4; font-weight: 700; color: #1B4332; text-align: center; font-size: 11px; }
+        .lesson-table .approval-cell { text-align: center; height: 50px; }
+        .tc-block { margin: 4px 0; }
+        .tc-t { color: #1B4332; font-weight: 700; }
+        .tc-c { color: #555; }
+ 
+        /* 관찰 기록 스타일 */
+        .obs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .obs-table td, .obs-table th { border: 1px solid #2D3436; padding: 8px 12px; vertical-align: top; line-height: 1.7; }
+        .obs-table .header-cell { background: #1B4332; color: white; font-weight: 700; text-align: center; white-space: nowrap; }
+        .obs-table .title-row td { background: #1B4332; color: white; font-weight: 800; text-align: center; font-size: 15px; padding: 12px; }
     </style>
 </head>
 <body>
-
+ 
     <!-- Toast -->
     <div id="notification" class="fixed top-6 left-1/2 -translate-x-1/2 z-[150] bg-slate-900 text-white px-8 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 hidden">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9EC6AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         <span id="toast-text" class="font-bold text-sm">알림</span>
     </div>
-
+ 
     <!-- Nav -->
     <nav class="fixed w-full z-50 glass-nav px-6 py-4">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
@@ -78,20 +74,20 @@
             </div>
         </div>
     </nav>
-
+ 
     <!-- Main -->
     <main class="pt-28 pb-20 px-6 max-w-7xl mx-auto grid lg:grid-cols-12 gap-8">
-
+ 
         <!-- 왼쪽: Studio -->
         <div class="lg:col-span-7 space-y-6 fade-in">
-
+ 
             <!-- 입력 카드 -->
             <div class="premium-card p-8 md:p-10">
                 <div class="mb-6 flex items-center justify-between border-b border-slate-50 pb-4">
                     <h2 class="text-lg font-black text-[#1B4332] uppercase tracking-wider">Lesson Studio</h2>
                     <span class="text-[9px] font-bold text-slate-300 uppercase">AI-Powered · 누리과정</span>
                 </div>
-
+ 
                 <!-- 탭 -->
                 <div class="bg-slate-100 p-1 rounded-xl flex mb-6">
                     <button id="planner-tab" class="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all tab-active">
@@ -103,7 +99,7 @@
                         아동 관찰 기록
                     </button>
                 </div>
-
+ 
                 <!-- 연령 + 입력 -->
                 <div class="space-y-4">
                     <div class="flex items-center gap-3">
@@ -121,23 +117,23 @@
                     </button>
                 </div>
             </div>
-
+ 
             <!-- 결과 카드 -->
             <div id="result-section" class="premium-card overflow-hidden border-2 border-[#F5EBE0] fade-in" style="position:relative;">
                 <div id="result-overlay">
                     <svg class="spin text-[#1B4332] w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                    <p class="text-[10px] font-black text-[#1B4332] tracking-widest uppercase">Tone Re-Constructing...</p>
+                    <p class="text-[10px] font-black text-[#1B4332] tracking-widest uppercase">AI가 교안을 구성 중입니다...</p>
                 </div>
-
+ 
                 <div class="p-6 bg-[#1B4332] text-white flex justify-between items-center">
                     <h3 class="font-black tracking-tight text-sm uppercase">Official Draft Result</h3>
                     <button id="reset-btn" title="다시 작성하기" class="opacity-50 hover:opacity-100 transition-opacity">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                     </button>
                 </div>
-
-                <div class="p-8 space-y-8">
-                    <!-- 톤 선택 -->
+ 
+                <!-- 톤 선택 -->
+                <div class="px-8 pt-6">
                     <div class="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100">
                         <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">문장 톤 실시간 재구성</p>
                         <div class="flex flex-wrap gap-3">
@@ -164,24 +160,28 @@
                             </label>
                         </div>
                     </div>
-                    <div id="result-content" class="text-slate-700 text-sm leading-relaxed custom-scroll"></div>
                 </div>
-
+ 
+                <!-- 교안 표 렌더링 영역 -->
+                <div class="p-8">
+                    <div id="result-content" class="custom-scroll"></div>
+                </div>
+ 
                 <div class="px-8 pb-8 flex gap-3">
                     <button id="copy-btn" class="btn-forest flex-1 py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-green-900/10">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                        복사해서 바로 활용하기
+                        텍스트 복사하기
                     </button>
                 </div>
             </div>
         </div>
-
+ 
         <!-- 오른쪽: 안내 패널 -->
         <aside class="lg:col-span-5 space-y-6 fade-in" style="animation-delay:0.15s;">
             <div class="px-2">
                 <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">사용 안내</h3>
             </div>
-
+ 
             <div class="premium-card p-8 space-y-6">
                 <div class="space-y-5">
                     <div class="flex gap-4">
@@ -194,8 +194,8 @@
                     <div class="flex gap-4">
                         <div class="w-8 h-8 bg-[#F5EBE0] rounded-xl flex items-center justify-center flex-shrink-0 text-[#1B4332] font-black text-xs">2</div>
                         <div>
-                            <p class="text-xs font-black text-slate-700 mb-1">초안 생성</p>
-                            <p class="text-[11px] text-slate-400 leading-relaxed">2019 개정 누리과정 기반으로 T-C 상호작용 대본이 포함된 전문 교안을 작성합니다.</p>
+                            <p class="text-xs font-black text-slate-700 mb-1">교안 양식 자동 생성</p>
+                            <p class="text-[11px] text-slate-400 leading-relaxed">2019 개정 누리과정 기반으로 도입/전개/마무리 표 형식의 교안이 생성됩니다.</p>
                         </div>
                     </div>
                     <div class="flex gap-4">
@@ -206,7 +206,7 @@
                         </div>
                     </div>
                 </div>
-
+ 
                 <div class="border-t border-slate-50 pt-6 space-y-3">
                     <p class="text-[9px] font-black text-slate-300 uppercase tracking-widest">지원 문서 유형</p>
                     <div class="flex flex-wrap gap-2">
@@ -217,21 +217,21 @@
                     </div>
                 </div>
             </div>
-
+ 
             <div class="premium-card p-6 border-l-4 border-[#D5BDAF]">
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">안내사항</p>
                 <p class="text-[11px] text-slate-500 leading-relaxed">본 내용은 AI가 작성한 초안입니다. 최종 검토 및 사용에 따른 모든 법적 책임은 사용자에게 있습니다.</p>
             </div>
         </aside>
     </main>
-
+ 
     <footer class="py-12 border-t border-slate-50 text-center text-[9px] font-bold text-slate-300 uppercase tracking-[0.3em]">
         © 2026 KIDS CANVAS PRO · Premium Assistant for Educators
     </footer>
-
+ 
     <script>
         let state = { activeMode: 'planner', ageGroup: '만 4세', selectedTone: 'standard', inputText: '', result: '' };
-
+ 
         const el = {
             plannerTab: document.getElementById('planner-tab'),
             obsTab: document.getElementById('obs-tab'),
@@ -239,20 +239,20 @@
             textarea: document.getElementById('input-textarea'),
             generateBtn: document.getElementById('generate-btn'),
             resultSection: document.getElementById('result-section'),
-            resultPre: document.getElementById('result-content'),
+            resultContent: document.getElementById('result-content'),
             resultOverlay: document.getElementById('result-overlay'),
             copyBtn: document.getElementById('copy-btn'),
             resetBtn: document.getElementById('reset-btn'),
             toneRadios: document.getElementsByName('tone'),
             notification: document.getElementById('notification'),
         };
-
+ 
         const showToast = (msg) => {
             document.getElementById('toast-text').innerText = msg;
             el.notification.classList.remove('hidden');
             setTimeout(() => el.notification.classList.add('hidden'), 3000);
         };
-
+ 
         const updateToneUI = () => {
             el.toneRadios.forEach(radio => {
                 const div = radio.closest('label').querySelector('div');
@@ -260,34 +260,150 @@
                 else { div.classList.remove('tone-active'); }
             });
         };
-
+ 
         const updateTabUI = () => {
             const active = 'flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all tab-active';
             const inactive = 'flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all tab-inactive';
             el.plannerTab.className = state.activeMode === 'planner' ? active : inactive;
             el.obsTab.className = state.activeMode === 'observation' ? active : inactive;
         };
-
+ 
         const setLoading = (on) => {
             el.generateBtn.disabled = on;
             el.generateBtn.innerHTML = on
                 ? `<svg class="spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> AI가 구상 중입니다...`
                 : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg> 초안 생성하기`;
         };
-
+ 
+        // JSON 파싱 후 교안 표 HTML 렌더링
+        const renderPlannerTable = (data) => {
+            const today = new Date().toLocaleDateString('ko-KR');
+            return `
+            <table class="lesson-table">
+                <tr class="title-row"><td colspan="4">반의 하루 놀이 이야기</td></tr>
+                <tr>
+                    <td class="header-cell">반이름</td><td></td>
+                    <td class="header-cell">연령</td><td>${state.ageGroup}</td>
+                </tr>
+                <tr>
+                    <td class="header-cell">날짜</td><td>${today}</td>
+                    <td class="header-cell">수업일수</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/230</td>
+                </tr>
+                <tr>
+                    <td class="header-cell">놀이 주제</td>
+                    <td colspan="3">${data.topic || ''}</td>
+                </tr>
+                <tr>
+                    <td class="header-cell">일일 목표</td>
+                    <td colspan="3">${(data.goals || []).map(g => `· ${g}`).join('<br>')}</td>
+                </tr>
+                <tr>
+                    <td class="header-cell">과의 흐름</td>
+                    <td colspan="3">${data.flow || '등원 → 오전 자유놀이/간식 → 아침 다모임 → 활동 → 점심/바깥놀이 → 하루 갈무리 및 귀가'}</td>
+                </tr>
+                <tr>
+                    <td class="header-cell" rowspan="2">도입<br><span style="font-weight:400;font-size:11px">(10분)</span></td>
+                    <td colspan="3">${formatTC(data.intro || '')}</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="background:#f9fafb;font-size:11px;color:#666">
+                        <strong style="color:#1B4332">준비물:</strong> ${data.intro_materials || ''}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="header-cell" rowspan="2">전개<br><span style="font-weight:400;font-size:11px">(40분)</span></td>
+                    <td colspan="3">${formatTC(data.main || '')}</td>
+                </tr>
+                <tr>
+                    <td colspan="3" style="background:#f9fafb;font-size:11px;color:#666">
+                        <strong style="color:#1B4332">준비물:</strong> ${data.main_materials || ''}&nbsp;&nbsp;
+                        <strong style="color:#1B4332">유의점:</strong> ${data.cautions || ''}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="header-cell">마무리<br><span style="font-weight:400;font-size:11px">(5분)</span></td>
+                    <td colspan="3">${formatTC(data.closing || '')}</td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="border:none"></td>
+                    <td class="approval-header">담임</td>
+                    <td class="approval-header">원장</td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="border:none;font-size:10px;color:#999;text-align:right;padding-right:8px">결재</td>
+                    <td class="approval-cell"></td>
+                    <td class="approval-cell"></td>
+                </tr>
+            </table>`;
+        };
+ 
+        const renderObsTable = (data) => {
+            return `
+            <table class="obs-table">
+                <tr class="title-row"><td colspan="2">아동 관찰 기록</td></tr>
+                <tr>
+                    <td class="header-cell" style="width:100px">관찰 아동</td>
+                    <td>${state.ageGroup} · ${data.situation || ''}</td>
+                </tr>
+                ${(data.areas || []).map(area => `
+                <tr>
+                    <td class="header-cell">${area.name}</td>
+                    <td>${area.content}</td>
+                </tr>`).join('')}
+                <tr>
+                    <td class="header-cell">교사 해석 및<br>지원 방향</td>
+                    <td>${data.teacher_note || ''}</td>
+                </tr>
+            </table>`;
+        };
+ 
+        const formatTC = (text) => {
+            if (!text) return '';
+            return text
+                .replace(/T:\s*/g, '<div class="tc-block"><span class="tc-t">T:</span> ')
+                .replace(/C:\s*/g, '</div><div class="tc-block"><span class="tc-c">C:</span> ')
+                .replace(/\n/g, '<br>') + '</div>';
+        };
+ 
         const generateDraft = async (isUpdate = false) => {
             if (!state.inputText.trim()) return;
             if (isUpdate) { el.resultOverlay.classList.add('active'); }
             else { setLoading(true); }
-
-            const systemPrompt = `당신은 대한민국 '2019 개정 누리과정' 및 구성주의 유아교육 전문가입니다. 선생님의 요구사항을 분석하여 전문적인 교육 문서를 작성하세요.
-[핵심 미션]
-1. 문맥 파악: 내용의 성격을 스스로 판단하여 도입 문구를 결정하세요.
-2. 발문 수준: ${state.ageGroup} 발달 수준에 맞춰 T-C 상호작용 대본을 상세하게 작성하세요.
-3. 톤앤매너: '${state.selectedTone}' 프리셋에 맞춰 문체를 지키세요. (standard=공식문서형, soft=따뜻한 대화형, observation=전문 관찰 기록)
-4. 모드: ${state.activeMode === 'planner' ? '수업 계획안' : '아동 관찰 기록'}`;
-            const userPrompt = `대상: ${state.ageGroup}, 톤: ${state.selectedTone}, 내용: "${state.inputText}"`;
-
+ 
+            const isPlanner = state.activeMode === 'planner';
+            const tone = state.selectedTone === 'standard' ? '공식 문서형 격식체' : state.selectedTone === 'soft' ? '따뜻한 대화형' : '전문 관찰 기록형';
+ 
+            const systemPrompt = isPlanner
+                ? `당신은 대한민국 '2019 개정 누리과정' 전문가입니다. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
+톤: ${tone}, 대상: ${state.ageGroup}
+ 
+{
+  "topic": "놀이 주제 한 줄",
+  "goals": ["목표1", "목표2", "목표3"],
+  "flow": "등원 → 오전 자유놀이/간식 → 아침 다모임 → 활동명 → 점심/바깥놀이 → 하루 갈무리 및 귀가",
+  "intro": "도입 내용. T: 교사 발문\\nC: 유아 예상 반응\\nT: 교사 발문\\nC: 유아 예상 반응",
+  "intro_materials": "도입 준비물",
+  "main": "전개 내용. T: 교사 발문\\nC: 유아 예상 반응\\nT: 교사 발문\\nC: 유아 예상 반응 (충분히 상세하게 작성)",
+  "main_materials": "전개 준비물",
+  "cautions": "유의사항",
+  "closing": "마무리 내용. T: 교사 발문\\nC: 유아 예상 반응"
+}`
+                : `당신은 대한민국 '2019 개정 누리과정' 전문가입니다. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
+톤: ${tone}, 대상: ${state.ageGroup}
+ 
+{
+  "situation": "관찰 상황 설명",
+  "areas": [
+    {"name": "신체·운동 발달", "content": "관찰 내용"},
+    {"name": "언어·의사소통", "content": "관찰 내용"},
+    {"name": "사회·정서 발달", "content": "관찰 내용"},
+    {"name": "인지·탐구", "content": "관찰 내용"}
+  ],
+  "teacher_note": "교사 해석 및 지원 방향"
+}`;
+ 
+            const userPrompt = `대상: ${state.ageGroup}, 내용: "${state.inputText}"`;
+ 
             try {
                 const response = await fetch('/api/generate', {
                     method: 'POST',
@@ -296,8 +412,15 @@
                 });
                 if (!response.ok) throw new Error("API_ERROR");
                 const data = await response.json();
-                state.result = data.result;
-                el.resultPre.innerHTML = marked.parse(state.result);
+                const raw = data.result;
+ 
+                // JSON 파싱
+                const clean = raw.replace(/```json|```/g, '').trim();
+                const parsed = JSON.parse(clean);
+                state.result = raw;
+                state.parsed = parsed;
+ 
+                el.resultContent.innerHTML = isPlanner ? renderPlannerTable(parsed) : renderObsTable(parsed);
                 el.resultSection.classList.add('visible');
                 if (!isUpdate) el.resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } catch (e) {
@@ -307,24 +430,25 @@
                 el.resultOverlay.classList.remove('active');
             }
         };
-
-        el.plannerTab.onclick = () => { state.activeMode = 'planner'; state.result = ''; el.resultSection.classList.remove('visible'); updateTabUI(); };
-        el.obsTab.onclick = () => { state.activeMode = 'observation'; state.result = ''; el.resultSection.classList.remove('visible'); updateTabUI(); };
+ 
+        el.plannerTab.onclick = () => { state.activeMode = 'planner'; state.result = ''; el.resultContent.innerHTML = ''; el.resultSection.classList.remove('visible'); updateTabUI(); };
+        el.obsTab.onclick = () => { state.activeMode = 'observation'; state.result = ''; el.resultContent.innerHTML = ''; el.resultSection.classList.remove('visible'); updateTabUI(); };
         el.ageSelect.onchange = (e) => { state.ageGroup = e.target.value; };
         el.textarea.oninput = (e) => { state.inputText = e.target.value; };
         el.generateBtn.onclick = () => generateDraft();
-        el.resetBtn.onclick = () => { state.inputText = ''; state.result = ''; el.textarea.value = ''; el.resultSection.classList.remove('visible'); };
+        el.resetBtn.onclick = () => { state.inputText = ''; state.result = ''; el.textarea.value = ''; el.resultContent.innerHTML = ''; el.resultSection.classList.remove('visible'); };
         el.copyBtn.onclick = () => {
             if (!state.result) return;
-            navigator.clipboard.writeText(state.result).then(() => showToast("복사되었습니다!")).catch(() => {
-                const t = document.createElement('textarea'); t.value = state.result; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
+            const text = el.resultContent.innerText;
+            navigator.clipboard.writeText(text).then(() => showToast("복사되었습니다!")).catch(() => {
+                const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
                 showToast("복사되었습니다!");
             });
         };
         el.toneRadios.forEach(radio => {
             radio.onchange = (e) => { state.selectedTone = e.target.value; updateToneUI(); if (state.result) generateDraft(true); };
         });
-
+ 
         updateTabUI();
         updateToneUI();
     </script>
