@@ -509,14 +509,34 @@
         el.textarea.oninput = (e) => { state.inputText = e.target.value; };
         el.generateBtn.onclick = () => generateDraft();
         el.resetBtn.onclick = () => { state.inputText = ''; state.result = ''; el.textarea.value = ''; el.resultContent.innerHTML = ''; el.resultSection.classList.remove('visible'); };
-        el.copyBtn.onclick = () => {
-            if (!state.result) return;
-            const text = el.resultContent.innerText;
-            navigator.clipboard.writeText(text).then(() => showToast("복사되었습니다!")).catch(() => {
-                const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t);
-                showToast("복사되었습니다!");
-            });
-        };
+        el.copyBtn.onclick = async () => {
+        if (!el.resultContent.innerHTML) return;
+
+    try {
+        // 1. 복사할 HTML 내용 가져오기
+        const htmlContent = el.resultContent.innerHTML;
+        // 2. 일반 텍스트 버전도 준비 (메모장 등 대응)
+        const plainText = el.resultContent.innerText;
+
+        // 3. HTML과 텍스트를 동시에 클립보드에 쓰기 (한글/워드 대응)
+        const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+        const blobText = new Blob([plainText], { type: 'text/plain' });
+
+        const data = [new ClipboardItem({
+            'text/html': blobHtml,
+            'text/plain': blobText
+        })];
+
+        await navigator.clipboard.write(data);
+        showToast("표 형식이 복사되었습니다! 한글(HWP)에 붙여넣어 보세요.");
+    } catch (err) {
+        // 구형 브라우저 대응을 위한 기존 방식 유지 (fallback)
+        console.error('HTML 복사 실패:', err);
+        const text = el.resultContent.innerText;
+        navigator.clipboard.writeText(text).then(() => showToast("텍스트로 복사되었습니다."));
+    }
+};
+           
         el.toneRadios.forEach(radio => {
             radio.onchange = (e) => { state.selectedTone = e.target.value; updateToneUI(); if (state.result) generateDraft(true); };
         });
