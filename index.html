@@ -344,6 +344,22 @@
                     <td colspan="3">${formatTC(data.closing || '')}</td>
                 </tr>
                 <tr>
+                    <td class="header-cell" style="background:#2D6A4F">확장 활동</td>
+                    <td colspan="3" style="padding:0">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px">
+                            <tr style="background:#f0f7f4">
+                                <th style="border:1px solid #ccc;padding:6px 10px;width:100px;color:#1B4332;font-weight:700">카테고리</th>
+                                <th style="border:1px solid #ccc;padding:6px 10px;color:#1B4332;font-weight:700">확장 아이디어</th>
+                            </tr>
+                            ${(data.extensions || []).map(ext => `
+                            <tr>
+                                <td style="border:1px solid #ccc;padding:7px 10px;text-align:center;background:#f9fafb;font-weight:700;color:#2D6A4F;font-size:11px">${ext.category || ''}</td>
+                                <td style="border:1px solid #ccc;padding:7px 10px;line-height:1.7">${ext.idea || ''}</td>
+                            </tr>`).join('')}
+                        </table>
+                    </td>
+                </tr>
+                <tr>
                     <td colspan="2" style="border:none"></td>
                     <td class="approval-header">담임</td>
                     <td class="approval-header">원장</td>
@@ -405,6 +421,7 @@
 4. 재료의 구체성: '여름 소품' 같은 모호한 단어는 금지. '선베드, 밀짚 파라솔, 초대형 튜브, 찹쌀가루, 식용 꽃(팬지/제비꽃)'처럼 구체적으로 나열할 것.
 5. 실질적 유의점: '안전에 유의한다'는 표현은 절대 금지. '바닥의 얼음 녹은 물을 즉시 걸레로 닦아 미끄러짐을 방지한다'처럼 구체적인 행동 지침을 적을 것.
 6. 열린 발문(T-C): "어때?", "좋지?" 같은 닫힌 질문 대신 "어떻게 하면 좋을까?", "어떤 느낌이 드니?"와 같은 구성주의적 열린 질문을 각 단계마다 2개 이상 포함할 것.
+7. 확장 활동(Extension Activities) 필수 포함: 활동이 일회성으로 끝나지 않고 다음 날이나 다른 영역으로 이어질 수 있는 구체적인 아이디어를 [공간 확장 / 매체 확장 / 사후 연계] 카테고리로 나누어 2~3가지 제시할 것. (예: "화전 만들기 후 식용 꽃을 말려 봄꽃 차를 마시는 다도 활동으로 확장", "활동 사진을 인화하여 우리들의 봄 식탁 전시회 개최")
 
 응답 JSON 형식:
 {
@@ -436,7 +453,12 @@
       "caution": "구체적 행동 지침 유의점"
     }
   ],
-  "closing": "마무리 내용 (유아 스스로 배움을 정리하도록 유도)\\nT: 회상 열린 발문\\nC: 유아 예상 반응\\nT: 연결 열린 발문\\nC: 유아 예상 반응"
+  "closing": "마무리 내용 (유아 스스로 배움을 정리하도록 유도)\\nT: 회상 열린 발문\\nC: 유아 예상 반응\\nT: 연결 열린 발문\\nC: 유아 예상 반응",
+  "extensions": [
+    {"category": "공간 확장", "idea": "구체적인 확장 활동 아이디어"},
+    {"category": "매체 확장", "idea": "구체적인 확장 활동 아이디어"},
+    {"category": "사후 연계", "idea": "구체적인 확장 활동 아이디어"}
+  ]
 }`
                 : `당신은 대한민국 '2019 개정 누리과정' 전문가입니다. 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 절대 포함하지 마세요.
 톤: ${tone}, 대상: ${state.ageGroup}
